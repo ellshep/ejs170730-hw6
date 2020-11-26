@@ -13,7 +13,14 @@
  */
 
 #include <iostream>
+#include <string>
+#include <sstream>
+#include <fstream>
+#include <iomanip>
+#include <stdint.h>
+#include <ctype.h>
 #include "cdk.h"
+//#include "binread.h"
 
 /*
  * For grins and giggles, we will define values using the C
@@ -24,10 +31,26 @@
 
 #define MATRIX_ROWS 5
 #define MATRIX_COLS 3
-#define BOX_WIDTH 15
+#define BOX_WIDTH 20
 #define MATRIX_NAME_STRING "Binary File Contents"
 
 using namespace std;
+
+class BinaryFileHeader
+{
+public:
+  uint32_t magicNumber; /* Should be 0xFEEDFACE */
+  uint32_t versionNumber;
+  uint64_t numRecords;
+};
+
+const int maxRecordStringLength = 25;
+class BinaryFileRecord
+{
+public:
+  uint8_t strLength;
+  char stringBuffer[maxRecordStringLength];
+};
 
 
 int main()
@@ -74,13 +97,60 @@ int main()
   /*
    * Dipslay a message
    */
-  setCDKMatrixCell(myMatrix, 2, 2, "Test Message");
+
+  //read binary file
+  BinaryFileHeader* myHeader = new BinaryFileHeader();
+
+  ifstream binInfile;
+  binInfile.open ("/scratch/perkins/cs3377.bin", ios::in | ios::binary);
+
+  binInfile.read((char *) myHeader, sizeof(BinaryFileHeader));
+  
+  //set table titles
+  stringstream magNum; 
+  magNum << hex << uppercase << myHeader->magicNumber;
+  string magNumStr = "Magic: 0x" + magNum.str();   
+  setCDKMatrixCell(myMatrix, 1, 1, magNumStr.c_str());
+
+  stringstream vers; 
+  vers << dec << myHeader->versionNumber; 
+  string versStr = "Version: " + vers.str(); 
+  setCDKMatrixCell(myMatrix, 1,2, versStr.c_str()); 
+
+  stringstream rec; 
+  rec << dec << myHeader->numRecords; 
+  string recStr = "NumRecords: " + rec.str(); 
+  setCDKMatrixCell(myMatrix, 1, 3, recStr.c_str()); 
+
+  //read binary records file
+  const int numRecs = stoi(rec.str()); 
+  BinaryFileRecord myRecord[numRecs]; 
+
+  for(int i=0; i<numRecs; i++)
+  {
+    binInfile.read((char *) &myRecord[i], sizeof(BinaryFileRecord)); 
+    
+    //print buffer to matrix
+    string data(myRecord[i].stringBuffer);
+    setCDKMatrixCell(myMatrix, i+2, 2, data.c_str());
+
+    //print strLength to matrix
+    int datLen = data.length();  
+    string slen = "strlen: " + to_string(datLen);
+
+    setCDKMatrixCell(myMatrix, i+2, 1, slen.c_str());
+
+
+  }
+
+
   drawCDKMatrix(myMatrix, true);    /* required  */
 
-  /* so we can see results */
-  sleep (5);
-
+  binInfile.close(); 
 
   // Cleanup screen
-  endCDK();
+  // when key pressed
+  char c = cin.get(); 
+  if(!isblank(c))
+    endCDK();
 }
